@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/quic-go/quic-go"
 	"reflect"
+	"regexp"
 	"strings"
 )
 
@@ -29,13 +30,151 @@ var types = []struct {
 	{"ListenAddrEarly", quic.ListenAddrEarly},
 }
 
+var varNames = []struct {
+	re   *regexp.Regexp
+	name string
+}{
+	{regexp.MustCompile(`^context.Context$`), "ctx"},
+	{regexp.MustCompile(`^net.Addr$`), "addr"},
+	{regexp.MustCompile(`chan `), "ch"},
+	{regexp.MustCompile(`^error$`), "err"},
+	{regexp.MustCompile(`^int$`), "n"},
+	{regexp.MustCompile(`^Conn$`), "conn"},
+	{regexp.MustCompile(`Stream$`), "stream"},
+	{regexp.MustCompile(`Code$`), "code"},
+	{regexp.MustCompile(`^[*]tls.Config$`), "tc"},
+	{regexp.MustCompile(`^[*]quic.Config$`), "qc"},
+	{regexp.MustCompile(`Listener$`), "ln"},
+	{regexp.MustCompile(`ID$`), "id"},
+}
+
 func main() {
 	typeToName := make(map[string]string)
-
 	for _, t := range types {
 		v := reflect.ValueOf(t.typ)
 		typeToName[v.Type().String()] = t.name
 	}
+	type arg struct {
+		varName     string
+		tmpName     string
+		origName    string
+		typeName    string
+		needWrapper bool
+	}
+	getArgs := func(get func(int) reflect.Type, num int, skipFirst bool) []arg {
+		out := make([]arg, 0, num)
+		for i := 0; i < num; i++ {
+			if i == 0 && skipFirst {
+				continue
+			}
+			var a arg
+			a.origName = get(i).String()
+			if a.origName == "[]uint8" {
+				a.origName = "[]byte"
+			}
+			a.typeName = a.origName
+			if n, ok := typeToName[a.origName]; ok {
+				a.typeName = n
+				a.needWrapper = true
+			}
+			for _, v := range varNames {
+				if v.re.MatchString(a.typeName) {
+					a.varName = v.name
+					break
+				}
+			}
+			if a.varName == "" {
+				if a.typeName == "[]byte" {
+					a.varName = "b"
+				} else {
+					short := a.typeName
+					if _, n, ok := strings.Cut(short, "."); ok {
+						short = n
+					}
+					a.varName = strings.ToLower(string(short[0]))
+				}
+			}
+			a.tmpName = a.varName + "Internal"
+			out = append(out, a)
+		}
+		return out
+	}
+	joinArgs := func(args []arg, includeVar bool) string {
+		parts := make([]string, 0, len(args))
+		for _, a := range args {
+			if includeVar {
+				parts = append(parts, fmt.Sprintf("%s %s", a.varName, a.typeName))
+			} else {
+				parts = append(parts, a.typeName)
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	joinVars := func(args []arg) string {
+		parts := make([]string, 0, len(args))
+		for _, a := range args {
+			if a.needWrapper {
+				parts = append(parts, fmt.Sprintf("%s.(*%sWrapper).Base", a.varName, a.typeName))
+			} else {
+				parts = append(parts, a.varName)
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	joinTmp := func(args []arg) string {
+		parts := make([]string, 0, len(args))
+		for _, a := range args {
+			if a.needWrapper {
+				parts = append(parts, a.tmpName)
+			} else {
+				parts = append(parts, a.varName)
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	writeFunc := func(receiver, funcName string, rt reflect.Type) {
+		inArgs := getArgs(rt.In, rt.NumIn(), receiver != "")
+		outArgs := getArgs(rt.Out, rt.NumOut(), false)
+		var hasWrappers bool
+		for _, oa := range outArgs {
+			if oa.needWrapper {
+				hasWrappers = true
+			}
+		}
+		if receiver != "" {
+			fmt.Printf("func (w *%s) %s(%s)", receiver, funcName, joinArgs(inArgs, true))
+		} else {
+			fmt.Printf("func %s(%s)", funcName, joinArgs(inArgs, true))
+		}
+		fmt.Printf(" (%s)", joinArgs(outArgs, hasWrappers))
+		fmt.Printf(" {\n")
+		for _, oa := range outArgs {
+			if oa.needWrapper {
+				fmt.Printf("\tvar %s %s\n", oa.tmpName, oa.origName)
+			}
+		}
+		prefix := "w.Base"
+		if receiver == "" {
+			prefix = "quic"
+		}
+		if len(outArgs) == 0 {
+			fmt.Printf("\t%s.%s(%s)\n", prefix, funcName, joinVars(inArgs))
+		} else if hasWrappers {
+			fmt.Printf("\t%s = %s.%s(%s)\n", joinTmp(outArgs), prefix, funcName, joinVars(inArgs))
+		} else {
+			fmt.Printf("\treturn %s.%s(%s)\n", prefix, funcName, joinVars(inArgs))
+		}
+		for _, oa := range outArgs {
+			if oa.needWrapper {
+				fmt.Printf("\tif %s != nil {\n\t\t%s = &%sWrapper{Base:%s}\n\t}\n", oa.tmpName, oa.varName, oa.typeName, oa.tmpName)
+			}
+		}
+		if len(outArgs) > 0 && hasWrappers {
+			fmt.Printf("\treturn\n")
+		}
+		fmt.Printf("}\n\n")
+	}
+
 	for _, t := range types {
 		v := reflect.ValueOf(t.typ)
 		if v.Kind() != reflect.Pointer {
@@ -48,112 +187,9 @@ func main() {
 
 		for i := 0; i < vt.NumMethod(); i++ {
 			m := vt.Method(i)
-			var inArgs []string
-			for j := 1; j < m.Type.NumIn(); j++ {
-				name := m.Type.In(j).String()
-				if n, ok := typeToName[name]; ok {
-					name = n
-				}
-				inArgs = append(inArgs, name)
-			}
-			var outArgs []string
-			for j := 0; j < m.Type.NumOut(); j++ {
-				name := m.Type.Out(j).String()
-				if n, ok := typeToName[name]; ok {
-					name = n
-				}
-				outArgs = append(outArgs, name)
-			}
-			fmt.Printf("\t%s(%s)", m.Name, strings.Join(inArgs, ", "))
-			if len(outArgs) > 0 {
-				if len(outArgs) > 1 {
-					fmt.Printf(" (%s)", strings.Join(outArgs, ", "))
-				} else {
-					fmt.Printf(" %s", outArgs[0])
-				}
-			}
-			fmt.Printf("\n")
-		}
-		fmt.Printf("}\n\n")
-	}
-
-	writeFunc := func(receiver, funcName string, rt reflect.Type) {
-		var inArgs []string
-		for i := 0; i < rt.NumIn(); i++ {
-			if i == 0 && receiver != "" {
-				continue
-			}
-			name := rt.In(i).String()
-			if n, ok := typeToName[name]; ok {
-				name = n
-			}
-			inArgs = append(inArgs, fmt.Sprintf("a%d %s", i, name))
-		}
-		var outArgs []string
-		var outArgs2 []string
-		var retNames []string
-		var wrappers []string
-		var vars []string
-		for i := 0; i < rt.NumOut(); i++ {
-			name := rt.Out(i).String()
-			tmpName := fmt.Sprintf("t%d", i)
-			retName := fmt.Sprintf("r%d", i)
-			if n, ok := typeToName[name]; ok {
-				vars = append(vars, fmt.Sprintf("var %s %s", tmpName, name))
-				name = n
-				wrappers = append(wrappers, fmt.Sprintf("if %s != nil {\n\t\t%s = &%sWrapper{Base:%s}\n\t}", tmpName, retName, name, tmpName))
-				retName = tmpName
-			}
-			outArgs = append(outArgs, fmt.Sprintf("r%d %s", i, name))
-			outArgs2 = append(outArgs2, name)
-			retNames = append(retNames, retName)
-		}
-		if receiver != "" {
-			fmt.Printf("func (w *%s) %s(%s)", receiver, funcName, strings.Join(inArgs, ", "))
-		} else {
-			fmt.Printf("func %s(%s)", funcName, strings.Join(inArgs, ", "))
-		}
-		if len(outArgs) > 0 {
-			if len(wrappers) > 0 {
-				fmt.Printf(" (%s)", strings.Join(outArgs, ", "))
-			} else if len(outArgs2) > 1 {
-				fmt.Printf(" (%s)", strings.Join(outArgs2, ", "))
-			} else {
-				fmt.Printf(" %s", outArgs2[0])
-			}
-		}
-		fmt.Printf(" {\n")
-		var argNames []string
-		for i := 0; i < rt.NumIn(); i++ {
-			if i == 0 && receiver != "" {
-				continue
-			}
-			name := rt.In(i).String()
-			if n, ok := typeToName[name]; ok {
-				argNames = append(argNames, fmt.Sprintf("a%d.(*%sWrapper).Base", i, n))
-				continue
-			}
-			argNames = append(argNames, fmt.Sprintf("a%d", i))
-		}
-		prefix := "w.Base"
-		if receiver == "" {
-			prefix = "quic"
-		}
-		if len(outArgs) > 0 {
-			if len(wrappers) > 0 {
-				for _, v := range vars {
-					fmt.Printf("\t%s\n", v)
-				}
-				fmt.Printf("\t%s = %s.%s(%s)\n", strings.Join(retNames, ", "), prefix, funcName, strings.Join(argNames, ", "))
-				for _, w := range wrappers {
-					fmt.Printf("\t%s\n", w)
-				}
-				fmt.Printf("\treturn\n")
-			} else {
-				fmt.Printf("\treturn %s.%s(%s)\n", prefix, funcName, strings.Join(argNames, ", "))
-			}
-		} else {
-			fmt.Printf("\t%s.%s(%s)\n", prefix, funcName, strings.Join(argNames, ", "))
+			inArgs := getArgs(m.Type.In, m.Type.NumIn(), false)
+			outArgs := getArgs(m.Type.Out, m.Type.NumOut(), false)
+			fmt.Printf("\t%s(%s) (%s)\n", m.Name, joinArgs(inArgs[1:], false), joinArgs(outArgs, false))
 		}
 		fmt.Printf("}\n\n")
 	}

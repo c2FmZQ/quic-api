@@ -26,8 +26,8 @@ type Transport interface {
 	DialEarly(context.Context, net.Addr, *tls.Config, *quic.Config) (Conn, error)
 	Listen(*tls.Config, *quic.Config) (Listener, error)
 	ListenEarly(*tls.Config, *quic.Config) (EarlyListener, error)
-	ReadNonQUICPacket(context.Context, []uint8) (int, net.Addr, error)
-	WriteTo([]uint8, net.Addr) (int, error)
+	ReadNonQUICPacket(context.Context, []byte) (int, net.Addr, error)
+	WriteTo([]byte, net.Addr) (int, error)
 }
 
 // Listener is an auto-generated interface for [quic.Listener]
@@ -59,9 +59,9 @@ type Conn interface {
 	OpenStreamSync(context.Context) (Stream, error)
 	OpenUniStream() (SendStream, error)
 	OpenUniStreamSync(context.Context) (SendStream, error)
-	ReceiveDatagram(context.Context) ([]uint8, error)
+	ReceiveDatagram(context.Context) ([]byte, error)
 	RemoteAddr() net.Addr
-	SendDatagram([]uint8) error
+	SendDatagram([]byte) error
 }
 
 // SendStream is an auto-generated interface for [quic.SendStream]
@@ -71,13 +71,13 @@ type SendStream interface {
 	Context() context.Context
 	SetWriteDeadline(time.Time) error
 	StreamID() quic.StreamID
-	Write([]uint8) (int, error)
+	Write([]byte) (int, error)
 }
 
 // ReceiveStream is an auto-generated interface for [quic.ReceiveStream]
 type ReceiveStream interface {
 	CancelRead(quic.StreamErrorCode)
-	Read([]uint8) (int, error)
+	Read([]byte) (int, error)
 	SetReadDeadline(time.Time) error
 	StreamID() quic.StreamID
 }
@@ -88,12 +88,12 @@ type Stream interface {
 	CancelWrite(quic.StreamErrorCode)
 	Close() error
 	Context() context.Context
-	Read([]uint8) (int, error)
+	Read([]byte) (int, error)
 	SetDeadline(time.Time) error
 	SetReadDeadline(time.Time) error
 	SetWriteDeadline(time.Time) error
 	StreamID() quic.StreamID
-	Write([]uint8) (int, error)
+	Write([]byte) (int, error)
 }
 
 // Path is an auto-generated interface for [quic.Path]
@@ -114,48 +114,48 @@ func (w *TransportWrapper) Close() error {
 	return w.Base.Close()
 }
 
-func (w *TransportWrapper) Dial(a1 context.Context, a2 net.Addr, a3 *tls.Config, a4 *quic.Config) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = w.Base.Dial(a1, a2, a3, a4)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func (w *TransportWrapper) Dial(ctx context.Context, addr net.Addr, tc *tls.Config, qc *quic.Config) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = w.Base.Dial(ctx, addr, tc, qc)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
 
-func (w *TransportWrapper) DialEarly(a1 context.Context, a2 net.Addr, a3 *tls.Config, a4 *quic.Config) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = w.Base.DialEarly(a1, a2, a3, a4)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func (w *TransportWrapper) DialEarly(ctx context.Context, addr net.Addr, tc *tls.Config, qc *quic.Config) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = w.Base.DialEarly(ctx, addr, tc, qc)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
 
-func (w *TransportWrapper) Listen(a1 *tls.Config, a2 *quic.Config) (r0 Listener, r1 error) {
-	var t0 *quic.Listener
-	t0, r1 = w.Base.Listen(a1, a2)
-	if t0 != nil {
-		r0 = &ListenerWrapper{Base: t0}
+func (w *TransportWrapper) Listen(tc *tls.Config, qc *quic.Config) (ln Listener, err error) {
+	var lnInternal *quic.Listener
+	lnInternal, err = w.Base.Listen(tc, qc)
+	if lnInternal != nil {
+		ln = &ListenerWrapper{Base: lnInternal}
 	}
 	return
 }
 
-func (w *TransportWrapper) ListenEarly(a1 *tls.Config, a2 *quic.Config) (r0 EarlyListener, r1 error) {
-	var t0 *quic.EarlyListener
-	t0, r1 = w.Base.ListenEarly(a1, a2)
-	if t0 != nil {
-		r0 = &EarlyListenerWrapper{Base: t0}
+func (w *TransportWrapper) ListenEarly(tc *tls.Config, qc *quic.Config) (ln EarlyListener, err error) {
+	var lnInternal *quic.EarlyListener
+	lnInternal, err = w.Base.ListenEarly(tc, qc)
+	if lnInternal != nil {
+		ln = &EarlyListenerWrapper{Base: lnInternal}
 	}
 	return
 }
 
-func (w *TransportWrapper) ReadNonQUICPacket(a1 context.Context, a2 []uint8) (int, net.Addr, error) {
-	return w.Base.ReadNonQUICPacket(a1, a2)
+func (w *TransportWrapper) ReadNonQUICPacket(ctx context.Context, b []byte) (int, net.Addr, error) {
+	return w.Base.ReadNonQUICPacket(ctx, b)
 }
 
-func (w *TransportWrapper) WriteTo(a1 []uint8, a2 net.Addr) (int, error) {
-	return w.Base.WriteTo(a1, a2)
+func (w *TransportWrapper) WriteTo(b []byte, addr net.Addr) (int, error) {
+	return w.Base.WriteTo(b, addr)
 }
 
 var _ Listener = (*ListenerWrapper)(nil)
@@ -165,11 +165,11 @@ type ListenerWrapper struct {
 	Base *quic.Listener
 }
 
-func (w *ListenerWrapper) Accept(a1 context.Context) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = w.Base.Accept(a1)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func (w *ListenerWrapper) Accept(ctx context.Context) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = w.Base.Accept(ctx)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
@@ -189,11 +189,11 @@ type EarlyListenerWrapper struct {
 	Base *quic.EarlyListener
 }
 
-func (w *EarlyListenerWrapper) Accept(a1 context.Context) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = w.Base.Accept(a1)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func (w *EarlyListenerWrapper) Accept(ctx context.Context) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = w.Base.Accept(ctx)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
@@ -213,35 +213,35 @@ type ConnWrapper struct {
 	Base *quic.Conn
 }
 
-func (w *ConnWrapper) AcceptStream(a1 context.Context) (r0 Stream, r1 error) {
-	var t0 *quic.Stream
-	t0, r1 = w.Base.AcceptStream(a1)
-	if t0 != nil {
-		r0 = &StreamWrapper{Base: t0}
+func (w *ConnWrapper) AcceptStream(ctx context.Context) (stream Stream, err error) {
+	var streamInternal *quic.Stream
+	streamInternal, err = w.Base.AcceptStream(ctx)
+	if streamInternal != nil {
+		stream = &StreamWrapper{Base: streamInternal}
 	}
 	return
 }
 
-func (w *ConnWrapper) AcceptUniStream(a1 context.Context) (r0 ReceiveStream, r1 error) {
-	var t0 *quic.ReceiveStream
-	t0, r1 = w.Base.AcceptUniStream(a1)
-	if t0 != nil {
-		r0 = &ReceiveStreamWrapper{Base: t0}
+func (w *ConnWrapper) AcceptUniStream(ctx context.Context) (stream ReceiveStream, err error) {
+	var streamInternal *quic.ReceiveStream
+	streamInternal, err = w.Base.AcceptUniStream(ctx)
+	if streamInternal != nil {
+		stream = &ReceiveStreamWrapper{Base: streamInternal}
 	}
 	return
 }
 
-func (w *ConnWrapper) AddPath(a1 Transport) (r0 Path, r1 error) {
-	var t0 *quic.Path
-	t0, r1 = w.Base.AddPath(a1.(*TransportWrapper).Base)
-	if t0 != nil {
-		r0 = &PathWrapper{Base: t0}
+func (w *ConnWrapper) AddPath(t Transport) (p Path, err error) {
+	var pInternal *quic.Path
+	pInternal, err = w.Base.AddPath(t.(*TransportWrapper).Base)
+	if pInternal != nil {
+		p = &PathWrapper{Base: pInternal}
 	}
 	return
 }
 
-func (w *ConnWrapper) CloseWithError(a1 quic.ApplicationErrorCode, a2 string) error {
-	return w.Base.CloseWithError(a1, a2)
+func (w *ConnWrapper) CloseWithError(code quic.ApplicationErrorCode, s string) error {
+	return w.Base.CloseWithError(code, s)
 }
 
 func (w *ConnWrapper) ConnectionState() quic.ConnectionState {
@@ -260,61 +260,61 @@ func (w *ConnWrapper) LocalAddr() net.Addr {
 	return w.Base.LocalAddr()
 }
 
-func (w *ConnWrapper) NextConnection(a1 context.Context) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = w.Base.NextConnection(a1)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func (w *ConnWrapper) NextConnection(ctx context.Context) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = w.Base.NextConnection(ctx)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
 
-func (w *ConnWrapper) OpenStream() (r0 Stream, r1 error) {
-	var t0 *quic.Stream
-	t0, r1 = w.Base.OpenStream()
-	if t0 != nil {
-		r0 = &StreamWrapper{Base: t0}
+func (w *ConnWrapper) OpenStream() (stream Stream, err error) {
+	var streamInternal *quic.Stream
+	streamInternal, err = w.Base.OpenStream()
+	if streamInternal != nil {
+		stream = &StreamWrapper{Base: streamInternal}
 	}
 	return
 }
 
-func (w *ConnWrapper) OpenStreamSync(a1 context.Context) (r0 Stream, r1 error) {
-	var t0 *quic.Stream
-	t0, r1 = w.Base.OpenStreamSync(a1)
-	if t0 != nil {
-		r0 = &StreamWrapper{Base: t0}
+func (w *ConnWrapper) OpenStreamSync(ctx context.Context) (stream Stream, err error) {
+	var streamInternal *quic.Stream
+	streamInternal, err = w.Base.OpenStreamSync(ctx)
+	if streamInternal != nil {
+		stream = &StreamWrapper{Base: streamInternal}
 	}
 	return
 }
 
-func (w *ConnWrapper) OpenUniStream() (r0 SendStream, r1 error) {
-	var t0 *quic.SendStream
-	t0, r1 = w.Base.OpenUniStream()
-	if t0 != nil {
-		r0 = &SendStreamWrapper{Base: t0}
+func (w *ConnWrapper) OpenUniStream() (stream SendStream, err error) {
+	var streamInternal *quic.SendStream
+	streamInternal, err = w.Base.OpenUniStream()
+	if streamInternal != nil {
+		stream = &SendStreamWrapper{Base: streamInternal}
 	}
 	return
 }
 
-func (w *ConnWrapper) OpenUniStreamSync(a1 context.Context) (r0 SendStream, r1 error) {
-	var t0 *quic.SendStream
-	t0, r1 = w.Base.OpenUniStreamSync(a1)
-	if t0 != nil {
-		r0 = &SendStreamWrapper{Base: t0}
+func (w *ConnWrapper) OpenUniStreamSync(ctx context.Context) (stream SendStream, err error) {
+	var streamInternal *quic.SendStream
+	streamInternal, err = w.Base.OpenUniStreamSync(ctx)
+	if streamInternal != nil {
+		stream = &SendStreamWrapper{Base: streamInternal}
 	}
 	return
 }
 
-func (w *ConnWrapper) ReceiveDatagram(a1 context.Context) ([]uint8, error) {
-	return w.Base.ReceiveDatagram(a1)
+func (w *ConnWrapper) ReceiveDatagram(ctx context.Context) ([]byte, error) {
+	return w.Base.ReceiveDatagram(ctx)
 }
 
 func (w *ConnWrapper) RemoteAddr() net.Addr {
 	return w.Base.RemoteAddr()
 }
 
-func (w *ConnWrapper) SendDatagram(a1 []uint8) error {
-	return w.Base.SendDatagram(a1)
+func (w *ConnWrapper) SendDatagram(b []byte) error {
+	return w.Base.SendDatagram(b)
 }
 
 var _ SendStream = (*SendStreamWrapper)(nil)
@@ -324,8 +324,8 @@ type SendStreamWrapper struct {
 	Base *quic.SendStream
 }
 
-func (w *SendStreamWrapper) CancelWrite(a1 quic.StreamErrorCode) {
-	w.Base.CancelWrite(a1)
+func (w *SendStreamWrapper) CancelWrite(code quic.StreamErrorCode) {
+	w.Base.CancelWrite(code)
 }
 
 func (w *SendStreamWrapper) Close() error {
@@ -336,16 +336,16 @@ func (w *SendStreamWrapper) Context() context.Context {
 	return w.Base.Context()
 }
 
-func (w *SendStreamWrapper) SetWriteDeadline(a1 time.Time) error {
-	return w.Base.SetWriteDeadline(a1)
+func (w *SendStreamWrapper) SetWriteDeadline(t time.Time) error {
+	return w.Base.SetWriteDeadline(t)
 }
 
 func (w *SendStreamWrapper) StreamID() quic.StreamID {
 	return w.Base.StreamID()
 }
 
-func (w *SendStreamWrapper) Write(a1 []uint8) (int, error) {
-	return w.Base.Write(a1)
+func (w *SendStreamWrapper) Write(b []byte) (int, error) {
+	return w.Base.Write(b)
 }
 
 var _ ReceiveStream = (*ReceiveStreamWrapper)(nil)
@@ -355,16 +355,16 @@ type ReceiveStreamWrapper struct {
 	Base *quic.ReceiveStream
 }
 
-func (w *ReceiveStreamWrapper) CancelRead(a1 quic.StreamErrorCode) {
-	w.Base.CancelRead(a1)
+func (w *ReceiveStreamWrapper) CancelRead(code quic.StreamErrorCode) {
+	w.Base.CancelRead(code)
 }
 
-func (w *ReceiveStreamWrapper) Read(a1 []uint8) (int, error) {
-	return w.Base.Read(a1)
+func (w *ReceiveStreamWrapper) Read(b []byte) (int, error) {
+	return w.Base.Read(b)
 }
 
-func (w *ReceiveStreamWrapper) SetReadDeadline(a1 time.Time) error {
-	return w.Base.SetReadDeadline(a1)
+func (w *ReceiveStreamWrapper) SetReadDeadline(t time.Time) error {
+	return w.Base.SetReadDeadline(t)
 }
 
 func (w *ReceiveStreamWrapper) StreamID() quic.StreamID {
@@ -378,12 +378,12 @@ type StreamWrapper struct {
 	Base *quic.Stream
 }
 
-func (w *StreamWrapper) CancelRead(a1 quic.StreamErrorCode) {
-	w.Base.CancelRead(a1)
+func (w *StreamWrapper) CancelRead(code quic.StreamErrorCode) {
+	w.Base.CancelRead(code)
 }
 
-func (w *StreamWrapper) CancelWrite(a1 quic.StreamErrorCode) {
-	w.Base.CancelWrite(a1)
+func (w *StreamWrapper) CancelWrite(code quic.StreamErrorCode) {
+	w.Base.CancelWrite(code)
 }
 
 func (w *StreamWrapper) Close() error {
@@ -394,28 +394,28 @@ func (w *StreamWrapper) Context() context.Context {
 	return w.Base.Context()
 }
 
-func (w *StreamWrapper) Read(a1 []uint8) (int, error) {
-	return w.Base.Read(a1)
+func (w *StreamWrapper) Read(b []byte) (int, error) {
+	return w.Base.Read(b)
 }
 
-func (w *StreamWrapper) SetDeadline(a1 time.Time) error {
-	return w.Base.SetDeadline(a1)
+func (w *StreamWrapper) SetDeadline(t time.Time) error {
+	return w.Base.SetDeadline(t)
 }
 
-func (w *StreamWrapper) SetReadDeadline(a1 time.Time) error {
-	return w.Base.SetReadDeadline(a1)
+func (w *StreamWrapper) SetReadDeadline(t time.Time) error {
+	return w.Base.SetReadDeadline(t)
 }
 
-func (w *StreamWrapper) SetWriteDeadline(a1 time.Time) error {
-	return w.Base.SetWriteDeadline(a1)
+func (w *StreamWrapper) SetWriteDeadline(t time.Time) error {
+	return w.Base.SetWriteDeadline(t)
 }
 
 func (w *StreamWrapper) StreamID() quic.StreamID {
 	return w.Base.StreamID()
 }
 
-func (w *StreamWrapper) Write(a1 []uint8) (int, error) {
-	return w.Base.Write(a1)
+func (w *StreamWrapper) Write(b []byte) (int, error) {
+	return w.Base.Write(b)
 }
 
 var _ Path = (*PathWrapper)(nil)
@@ -429,8 +429,8 @@ func (w *PathWrapper) Close() error {
 	return w.Base.Close()
 }
 
-func (w *PathWrapper) Probe(a1 context.Context) error {
-	return w.Base.Probe(a1)
+func (w *PathWrapper) Probe(ctx context.Context) error {
+	return w.Base.Probe(ctx)
 }
 
 func (w *PathWrapper) Switch() error {
@@ -438,81 +438,81 @@ func (w *PathWrapper) Switch() error {
 }
 
 // Dial is an auto-generated wrapper for [quic.Dial]
-func Dial(a0 context.Context, a1 net.PacketConn, a2 net.Addr, a3 *tls.Config, a4 *quic.Config) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = quic.Dial(a0, a1, a2, a3, a4)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func Dial(ctx context.Context, p net.PacketConn, addr net.Addr, tc *tls.Config, qc *quic.Config) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = quic.Dial(ctx, p, addr, tc, qc)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
 
 // DialEarly is an auto-generated wrapper for [quic.DialEarly]
-func DialEarly(a0 context.Context, a1 net.PacketConn, a2 net.Addr, a3 *tls.Config, a4 *quic.Config) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = quic.DialEarly(a0, a1, a2, a3, a4)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func DialEarly(ctx context.Context, p net.PacketConn, addr net.Addr, tc *tls.Config, qc *quic.Config) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = quic.DialEarly(ctx, p, addr, tc, qc)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
 
 // DialAddr is an auto-generated wrapper for [quic.DialAddr]
-func DialAddr(a0 context.Context, a1 string, a2 *tls.Config, a3 *quic.Config) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = quic.DialAddr(a0, a1, a2, a3)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func DialAddr(ctx context.Context, s string, tc *tls.Config, qc *quic.Config) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = quic.DialAddr(ctx, s, tc, qc)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
 
 // DialAddrEarly is an auto-generated wrapper for [quic.DialAddrEarly]
-func DialAddrEarly(a0 context.Context, a1 string, a2 *tls.Config, a3 *quic.Config) (r0 Conn, r1 error) {
-	var t0 *quic.Conn
-	t0, r1 = quic.DialAddrEarly(a0, a1, a2, a3)
-	if t0 != nil {
-		r0 = &ConnWrapper{Base: t0}
+func DialAddrEarly(ctx context.Context, s string, tc *tls.Config, qc *quic.Config) (conn Conn, err error) {
+	var connInternal *quic.Conn
+	connInternal, err = quic.DialAddrEarly(ctx, s, tc, qc)
+	if connInternal != nil {
+		conn = &ConnWrapper{Base: connInternal}
 	}
 	return
 }
 
 // Listen is an auto-generated wrapper for [quic.Listen]
-func Listen(a0 net.PacketConn, a1 *tls.Config, a2 *quic.Config) (r0 Listener, r1 error) {
-	var t0 *quic.Listener
-	t0, r1 = quic.Listen(a0, a1, a2)
-	if t0 != nil {
-		r0 = &ListenerWrapper{Base: t0}
+func Listen(p net.PacketConn, tc *tls.Config, qc *quic.Config) (ln Listener, err error) {
+	var lnInternal *quic.Listener
+	lnInternal, err = quic.Listen(p, tc, qc)
+	if lnInternal != nil {
+		ln = &ListenerWrapper{Base: lnInternal}
 	}
 	return
 }
 
 // ListenEarly is an auto-generated wrapper for [quic.ListenEarly]
-func ListenEarly(a0 net.PacketConn, a1 *tls.Config, a2 *quic.Config) (r0 EarlyListener, r1 error) {
-	var t0 *quic.EarlyListener
-	t0, r1 = quic.ListenEarly(a0, a1, a2)
-	if t0 != nil {
-		r0 = &EarlyListenerWrapper{Base: t0}
+func ListenEarly(p net.PacketConn, tc *tls.Config, qc *quic.Config) (ln EarlyListener, err error) {
+	var lnInternal *quic.EarlyListener
+	lnInternal, err = quic.ListenEarly(p, tc, qc)
+	if lnInternal != nil {
+		ln = &EarlyListenerWrapper{Base: lnInternal}
 	}
 	return
 }
 
 // ListenAddr is an auto-generated wrapper for [quic.ListenAddr]
-func ListenAddr(a0 string, a1 *tls.Config, a2 *quic.Config) (r0 Listener, r1 error) {
-	var t0 *quic.Listener
-	t0, r1 = quic.ListenAddr(a0, a1, a2)
-	if t0 != nil {
-		r0 = &ListenerWrapper{Base: t0}
+func ListenAddr(s string, tc *tls.Config, qc *quic.Config) (ln Listener, err error) {
+	var lnInternal *quic.Listener
+	lnInternal, err = quic.ListenAddr(s, tc, qc)
+	if lnInternal != nil {
+		ln = &ListenerWrapper{Base: lnInternal}
 	}
 	return
 }
 
 // ListenAddrEarly is an auto-generated wrapper for [quic.ListenAddrEarly]
-func ListenAddrEarly(a0 string, a1 *tls.Config, a2 *quic.Config) (r0 EarlyListener, r1 error) {
-	var t0 *quic.EarlyListener
-	t0, r1 = quic.ListenAddrEarly(a0, a1, a2)
-	if t0 != nil {
-		r0 = &EarlyListenerWrapper{Base: t0}
+func ListenAddrEarly(s string, tc *tls.Config, qc *quic.Config) (ln EarlyListener, err error) {
+	var lnInternal *quic.EarlyListener
+	lnInternal, err = quic.ListenAddrEarly(s, tc, qc)
+	if lnInternal != nil {
+		ln = &EarlyListenerWrapper{Base: lnInternal}
 	}
 	return
 }
