@@ -48,132 +48,168 @@ var varNames = []struct {
 	{regexp.MustCompile(`ID$`), "id"},
 }
 
-func main() {
-	typeToName := make(map[string]string)
+type argument struct {
+	varName      string
+	localName    string
+	origTypeName string
+	typeName     string
+	needWrapper  bool
+}
+
+type arguments []argument
+
+func (aa arguments) sig(includeVar bool) string {
+	parts := make([]string, 0, len(aa))
+	for _, a := range aa {
+		if includeVar {
+			parts = append(parts, fmt.Sprintf("%s %s", a.varName, a.typeName))
+		} else {
+			parts = append(parts, a.typeName)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func (aa arguments) callParams() string {
+	parts := make([]string, 0, len(aa))
+	for _, a := range aa {
+		if a.needWrapper {
+			parts = append(parts, fmt.Sprintf("%s.(*%sWrapper).Base", a.varName, a.typeName))
+		} else {
+			parts = append(parts, a.varName)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func (aa arguments) localVars() string {
+	parts := make([]string, 0, len(aa))
+	for _, a := range aa {
+		if a.needWrapper {
+			parts = append(parts, a.localName)
+		} else {
+			parts = append(parts, a.varName)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+type builder struct {
+	typeToName map[string]string
+}
+
+func (b *builder) init() {
+	b.typeToName = make(map[string]string)
 	for _, t := range types {
 		v := reflect.ValueOf(t.typ)
-		typeToName[v.Type().String()] = t.name
+		b.typeToName[v.Type().String()] = t.name
 	}
-	type arg struct {
-		varName     string
-		tmpName     string
-		origName    string
-		typeName    string
-		needWrapper bool
-	}
-	getArgs := func(get func(int) reflect.Type, num int, skipFirst bool) []arg {
-		out := make([]arg, 0, num)
-		for i := 0; i < num; i++ {
-			if i == 0 && skipFirst {
-				continue
+}
+
+func (b *builder) args(get func(int) reflect.Type, num int, skipFirst bool) arguments {
+	out := make(arguments, 0, num)
+	for i := 0; i < num; i++ {
+		if i == 0 && skipFirst {
+			continue
+		}
+		var a argument
+		a.origTypeName = get(i).String()
+		if a.origTypeName == "[]uint8" {
+			a.origTypeName = "[]byte"
+		}
+		a.typeName = a.origTypeName
+		if n, ok := b.typeToName[a.origTypeName]; ok {
+			a.typeName = n
+			a.needWrapper = true
+		}
+		for _, v := range varNames {
+			if v.re.MatchString(a.typeName) {
+				a.varName = v.name
+				break
 			}
-			var a arg
-			a.origName = get(i).String()
-			if a.origName == "[]uint8" {
-				a.origName = "[]byte"
-			}
-			a.typeName = a.origName
-			if n, ok := typeToName[a.origName]; ok {
-				a.typeName = n
-				a.needWrapper = true
-			}
-			for _, v := range varNames {
-				if v.re.MatchString(a.typeName) {
-					a.varName = v.name
-					break
+		}
+		if a.varName == "" {
+			if a.typeName == "[]byte" {
+				a.varName = "b"
+			} else {
+				short := a.typeName
+				if _, n, ok := strings.Cut(short, "."); ok {
+					short = n
 				}
+				a.varName = strings.ToLower(string(short[0]))
 			}
-			if a.varName == "" {
-				if a.typeName == "[]byte" {
-					a.varName = "b"
-				} else {
-					short := a.typeName
-					if _, n, ok := strings.Cut(short, "."); ok {
-						short = n
-					}
-					a.varName = strings.ToLower(string(short[0]))
-				}
-			}
-			a.tmpName = a.varName + "Internal"
-			out = append(out, a)
 		}
-		return out
+		a.localName = a.varName + "Internal"
+		out = append(out, a)
 	}
-	joinArgs := func(args []arg, includeVar bool) string {
-		parts := make([]string, 0, len(args))
-		for _, a := range args {
-			if includeVar {
-				parts = append(parts, fmt.Sprintf("%s %s", a.varName, a.typeName))
-			} else {
-				parts = append(parts, a.typeName)
-			}
+	names := make(map[string]bool)
+	dups := make([]string, 0, len(out))
+	for _, v := range out {
+		if names[v.varName] {
+			dups = append(dups, v.varName)
+			continue
 		}
-		return strings.Join(parts, ", ")
+		names[v.varName] = true
 	}
-	joinVars := func(args []arg) string {
-		parts := make([]string, 0, len(args))
-		for _, a := range args {
-			if a.needWrapper {
-				parts = append(parts, fmt.Sprintf("%s.(*%sWrapper).Base", a.varName, a.typeName))
-			} else {
-				parts = append(parts, a.varName)
+	for _, d := range dups {
+		count := 1
+		for i, v := range out {
+			if d == v.varName {
+				v.varName = fmt.Sprintf("%s%d", d, count)
+				out[i] = v
+				count++
 			}
 		}
-		return strings.Join(parts, ", ")
 	}
-	joinTmp := func(args []arg) string {
-		parts := make([]string, 0, len(args))
-		for _, a := range args {
-			if a.needWrapper {
-				parts = append(parts, a.tmpName)
-			} else {
-				parts = append(parts, a.varName)
-			}
+	return out
+}
+
+func (b *builder) writeFunc(receiver, name string, rt reflect.Type) {
+	inArgs := b.args(rt.In, rt.NumIn(), receiver != "")
+	outArgs := b.args(rt.Out, rt.NumOut(), false)
+	var hasWrappers bool
+	for _, oa := range outArgs {
+		if oa.needWrapper {
+			hasWrappers = true
 		}
-		return strings.Join(parts, ", ")
 	}
-	writeFunc := func(receiver, funcName string, rt reflect.Type) {
-		inArgs := getArgs(rt.In, rt.NumIn(), receiver != "")
-		outArgs := getArgs(rt.Out, rt.NumOut(), false)
-		var hasWrappers bool
-		for _, oa := range outArgs {
-			if oa.needWrapper {
-				hasWrappers = true
-			}
-		}
-		if receiver != "" {
-			fmt.Printf("func (w *%s) %s(%s)", receiver, funcName, joinArgs(inArgs, true))
-		} else {
-			fmt.Printf("func %s(%s)", funcName, joinArgs(inArgs, true))
-		}
-		fmt.Printf(" (%s)", joinArgs(outArgs, hasWrappers))
-		fmt.Printf(" {\n")
-		for _, oa := range outArgs {
-			if oa.needWrapper {
-				fmt.Printf("\tvar %s %s\n", oa.tmpName, oa.origName)
-			}
-		}
-		prefix := "w.Base"
-		if receiver == "" {
-			prefix = "quic"
-		}
-		if len(outArgs) == 0 {
-			fmt.Printf("\t%s.%s(%s)\n", prefix, funcName, joinVars(inArgs))
-		} else if hasWrappers {
-			fmt.Printf("\t%s = %s.%s(%s)\n", joinTmp(outArgs), prefix, funcName, joinVars(inArgs))
-		} else {
-			fmt.Printf("\treturn %s.%s(%s)\n", prefix, funcName, joinVars(inArgs))
-		}
-		for _, oa := range outArgs {
-			if oa.needWrapper {
-				fmt.Printf("\tif %s != nil {\n\t\t%s = &%sWrapper{Base:%s}\n\t}\n", oa.tmpName, oa.varName, oa.typeName, oa.tmpName)
-			}
-		}
-		if len(outArgs) > 0 && hasWrappers {
-			fmt.Printf("\treturn\n")
-		}
-		fmt.Printf("}\n\n")
+	if receiver != "" {
+		fmt.Printf("func (w *%s) %s(%s)", receiver, name, inArgs.sig(true))
+	} else {
+		fmt.Printf("func %s(%s)", name, inArgs.sig(true))
 	}
+	fmt.Printf(" (%s)", outArgs.sig(hasWrappers))
+	fmt.Printf(" {\n")
+	for _, oa := range outArgs {
+		if oa.needWrapper {
+			fmt.Printf("\tvar %s %s\n", oa.localName, oa.origTypeName)
+		}
+	}
+	prefix := "w.Base"
+	if receiver == "" {
+		prefix = "quic"
+	}
+	if len(outArgs) == 0 {
+		fmt.Printf("\t%s.%s(%s)\n", prefix, name, inArgs.callParams())
+	} else if hasWrappers {
+		fmt.Printf("\t%s = %s.%s(%s)\n", outArgs.localVars(), prefix, name, inArgs.callParams())
+	} else {
+		fmt.Printf("\treturn %s.%s(%s)\n", prefix, name, inArgs.callParams())
+	}
+	for _, oa := range outArgs {
+		if oa.needWrapper {
+			fmt.Printf("\tif %s != nil {\n\t\t%s = &%sWrapper{Base:%s}\n\t}\n", oa.localName, oa.varName, oa.typeName, oa.localName)
+		}
+	}
+	if hasWrappers {
+		fmt.Printf("\treturn\n")
+	}
+	fmt.Printf("}\n\n")
+}
+
+func main() {
+	b := &builder{}
+	b.init()
 
 	for _, t := range types {
 		v := reflect.ValueOf(t.typ)
@@ -187,9 +223,9 @@ func main() {
 
 		for i := 0; i < vt.NumMethod(); i++ {
 			m := vt.Method(i)
-			inArgs := getArgs(m.Type.In, m.Type.NumIn(), false)
-			outArgs := getArgs(m.Type.Out, m.Type.NumOut(), false)
-			fmt.Printf("\t%s(%s) (%s)\n", m.Name, joinArgs(inArgs[1:], false), joinArgs(outArgs, false))
+			inArgs := b.args(m.Type.In, m.Type.NumIn(), true)
+			outArgs := b.args(m.Type.Out, m.Type.NumOut(), false)
+			fmt.Printf("\t%s(%s) (%s)\n", m.Name, inArgs.sig(false), outArgs.sig(false))
 		}
 		fmt.Printf("}\n\n")
 	}
@@ -211,7 +247,7 @@ func main() {
 
 		for i := 0; i < vt.NumMethod(); i++ {
 			m := vt.Method(i)
-			writeFunc(structName, m.Name, m.Type)
+			b.writeFunc(structName, m.Name, m.Type)
 		}
 	}
 
@@ -221,6 +257,6 @@ func main() {
 			continue
 		}
 		fmt.Printf("// %s is an auto-generated wrapper for [quic.%s]\n", t.name, t.name)
-		writeFunc("", t.name, v.Type())
+		b.writeFunc("", t.name, v.Type())
 	}
 }
