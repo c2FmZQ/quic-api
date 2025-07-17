@@ -4,9 +4,10 @@
 
 for f in $(find . -name "*.go"); do
   sed -i -r \
-    -e 's:&quic[.]((Early)?Listener)\{\}:(quicapi.\1)(nil):' \
     -e 's:[*]quic[.]((Conn|(Send|Receive)?Stream|Transport|EarlyListener)([,;\) ]|$)):quicapi.\1:' \
     -e 's:quic[.]((Dial|Listen)(Addr)?(Early)?):quicapi.\1:' \
+    -e 's:&quic[.]((Early)?Listener)\{\}:(quicapi.\1)(nil):' \
+    -e 's:(&quic[.]Transport\{[^}]*\}):quicapi.WrapTransport(\1):' \
     $f
 done
 
