@@ -74,6 +74,7 @@ type SendStream interface {
 	CancelWrite(quic.StreamErrorCode)
 	Close() error
 	Context() context.Context
+	SetReliableBoundary()
 	SetWriteDeadline(time.Time) error
 	StreamID() quic.StreamID
 	Write([]byte) (int, error)
@@ -421,6 +422,10 @@ func (w *WrappedSendStream) Close() error {
 
 func (w *WrappedSendStream) Context() context.Context {
 	return w.base.Context()
+}
+
+func (w *WrappedSendStream) SetReliableBoundary() {
+	w.base.SetReliableBoundary()
 }
 
 func (w *WrappedSendStream) SetWriteDeadline(t time.Time) error {
