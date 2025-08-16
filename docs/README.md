@@ -1,4 +1,5 @@
 [![Go](https://github.com/c2FmZQ/quic-api/actions/workflows/go.yml/badge.svg)](https://github.com/c2FmZQ/quic-api/actions/workflows/go.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/c2FmZQ/quic-api.svg)](https://pkg.go.dev/github.com/c2FmZQ/quic-api)
 
 # quic-api
 
