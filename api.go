@@ -55,6 +55,7 @@ type Conn interface {
 	AddPath(TransportUnwrapper) (Path, error)
 	CloseWithError(quic.ApplicationErrorCode, string) error
 	ConnectionState() quic.ConnectionState
+	ConnectionStats() quic.ConnectionStats
 	Context() context.Context
 	HandshakeComplete() <-chan struct{}
 	LocalAddr() net.Addr
@@ -321,6 +322,10 @@ func (w *WrappedConn) CloseWithError(code quic.ApplicationErrorCode, s string) e
 
 func (w *WrappedConn) ConnectionState() quic.ConnectionState {
 	return w.base.ConnectionState()
+}
+
+func (w *WrappedConn) ConnectionStats() quic.ConnectionStats {
+	return w.base.ConnectionStats()
 }
 
 func (w *WrappedConn) Context() context.Context {
