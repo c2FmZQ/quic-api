@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/qlogwriter"
 )
 
 // ### AUTO GENERATED CODE BELOW
@@ -64,6 +65,7 @@ type Conn interface {
 	OpenStreamSync(context.Context) (Stream, error)
 	OpenUniStream() (SendStream, error)
 	OpenUniStreamSync(context.Context) (SendStream, error)
+	QlogTrace() qlogwriter.Trace
 	ReceiveDatagram(context.Context) ([]byte, error)
 	RemoteAddr() net.Addr
 	SendDatagram([]byte) error
@@ -373,6 +375,10 @@ func (w *WrappedConn) OpenUniStreamSync(ctx context.Context) (stream SendStream,
 	streamInternal, err = w.base.OpenUniStreamSync(ctx)
 	stream = WrapSendStream(streamInternal)
 	return
+}
+
+func (w *WrappedConn) QlogTrace() qlogwriter.Trace {
+	return w.base.QlogTrace()
 }
 
 func (w *WrappedConn) ReceiveDatagram(ctx context.Context) ([]byte, error) {
