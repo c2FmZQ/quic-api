@@ -1,8 +1,8 @@
 module github.com/c2FmZQ/quic-api
 
-go 1.24.4
+go 1.25.5
 
-require github.com/quic-go/quic-go v0.57.0
+require github.com/quic-go/quic-go v0.59.0
 
 require (
 	golang.org/x/crypto v0.43.0 // indirect

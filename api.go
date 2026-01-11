@@ -87,6 +87,7 @@ type SendStream interface {
 // Use [WrapReceiveStream] to convert a [*quic.ReceiveStream] to a [ReceiveStream].
 type ReceiveStream interface {
 	CancelRead(quic.StreamErrorCode)
+	Peek([]byte) (int, error)
 	Read([]byte) (int, error)
 	SetReadDeadline(time.Time) error
 	StreamID() quic.StreamID
@@ -99,9 +100,11 @@ type Stream interface {
 	CancelWrite(quic.StreamErrorCode)
 	Close() error
 	Context() context.Context
+	Peek([]byte) (int, error)
 	Read([]byte) (int, error)
 	SetDeadline(time.Time) error
 	SetReadDeadline(time.Time) error
+	SetReliableBoundary()
 	SetWriteDeadline(time.Time) error
 	StreamID() quic.StreamID
 	Write([]byte) (int, error)
@@ -485,6 +488,10 @@ func (w *WrappedReceiveStream) CancelRead(code quic.StreamErrorCode) {
 	w.base.CancelRead(code)
 }
 
+func (w *WrappedReceiveStream) Peek(b []byte) (int, error) {
+	return w.base.Peek(b)
+}
+
 func (w *WrappedReceiveStream) Read(b []byte) (int, error) {
 	return w.base.Read(b)
 }
@@ -543,6 +550,10 @@ func (w *WrappedStream) Context() context.Context {
 	return w.base.Context()
 }
 
+func (w *WrappedStream) Peek(b []byte) (int, error) {
+	return w.base.Peek(b)
+}
+
 func (w *WrappedStream) Read(b []byte) (int, error) {
 	return w.base.Read(b)
 }
@@ -553,6 +564,10 @@ func (w *WrappedStream) SetDeadline(t time.Time) error {
 
 func (w *WrappedStream) SetReadDeadline(t time.Time) error {
 	return w.base.SetReadDeadline(t)
+}
+
+func (w *WrappedStream) SetReliableBoundary() {
+	w.base.SetReliableBoundary()
 }
 
 func (w *WrappedStream) SetWriteDeadline(t time.Time) error {
