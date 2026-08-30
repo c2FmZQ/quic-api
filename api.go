@@ -77,10 +77,13 @@ type SendStream interface {
 	CancelWrite(quic.StreamErrorCode)
 	Close() error
 	Context() context.Context
+	SetPriority(int8, bool)
 	SetReliableBoundary()
 	SetWriteDeadline(time.Time) error
 	StreamID() quic.StreamID
+	TryWriteAll([]byte) error
 	Write([]byte) (int, error)
+	WriteWithLimit([]byte, func(int) int) (int, error)
 }
 
 // ReceiveStream is an auto-generated interface for [quic.ReceiveStream].
@@ -90,6 +93,7 @@ type ReceiveStream interface {
 	Peek([]byte) (int, error)
 	Read([]byte) (int, error)
 	SetReadDeadline(time.Time) error
+	SetReceiveFinalSizeCallback(func(int64))
 	StreamID() quic.StreamID
 }
 
@@ -103,11 +107,15 @@ type Stream interface {
 	Peek([]byte) (int, error)
 	Read([]byte) (int, error)
 	SetDeadline(time.Time) error
+	SetPriority(int8, bool)
 	SetReadDeadline(time.Time) error
+	SetReceiveFinalSizeCallback(func(int64))
 	SetReliableBoundary()
 	SetWriteDeadline(time.Time) error
 	StreamID() quic.StreamID
+	TryWriteAll([]byte) error
 	Write([]byte) (int, error)
+	WriteWithLimit([]byte, func(int) int) (int, error)
 }
 
 // Path is an auto-generated interface for [quic.Path].
@@ -438,6 +446,10 @@ func (w *WrappedSendStream) Context() context.Context {
 	return w.base.Context()
 }
 
+func (w *WrappedSendStream) SetPriority(i int8, b bool) {
+	w.base.SetPriority(i, b)
+}
+
 func (w *WrappedSendStream) SetReliableBoundary() {
 	w.base.SetReliableBoundary()
 }
@@ -450,8 +462,16 @@ func (w *WrappedSendStream) StreamID() quic.StreamID {
 	return w.base.StreamID()
 }
 
+func (w *WrappedSendStream) TryWriteAll(b []byte) error {
+	return w.base.TryWriteAll(b)
+}
+
 func (w *WrappedSendStream) Write(b []byte) (int, error) {
 	return w.base.Write(b)
+}
+
+func (w *WrappedSendStream) WriteWithLimit(b []byte, f func(int) int) (int, error) {
+	return w.base.WriteWithLimit(b, f)
 }
 
 // Unwrap returns the underlying [*quic.SendStream].
@@ -498,6 +518,10 @@ func (w *WrappedReceiveStream) Read(b []byte) (int, error) {
 
 func (w *WrappedReceiveStream) SetReadDeadline(t time.Time) error {
 	return w.base.SetReadDeadline(t)
+}
+
+func (w *WrappedReceiveStream) SetReceiveFinalSizeCallback(f func(int64)) {
+	w.base.SetReceiveFinalSizeCallback(f)
 }
 
 func (w *WrappedReceiveStream) StreamID() quic.StreamID {
@@ -562,8 +586,16 @@ func (w *WrappedStream) SetDeadline(t time.Time) error {
 	return w.base.SetDeadline(t)
 }
 
+func (w *WrappedStream) SetPriority(i int8, b bool) {
+	w.base.SetPriority(i, b)
+}
+
 func (w *WrappedStream) SetReadDeadline(t time.Time) error {
 	return w.base.SetReadDeadline(t)
+}
+
+func (w *WrappedStream) SetReceiveFinalSizeCallback(f func(int64)) {
+	w.base.SetReceiveFinalSizeCallback(f)
 }
 
 func (w *WrappedStream) SetReliableBoundary() {
@@ -578,8 +610,16 @@ func (w *WrappedStream) StreamID() quic.StreamID {
 	return w.base.StreamID()
 }
 
+func (w *WrappedStream) TryWriteAll(b []byte) error {
+	return w.base.TryWriteAll(b)
+}
+
 func (w *WrappedStream) Write(b []byte) (int, error) {
 	return w.base.Write(b)
+}
+
+func (w *WrappedStream) WriteWithLimit(b []byte, f func(int) int) (int, error) {
+	return w.base.WriteWithLimit(b, f)
 }
 
 // Unwrap returns the underlying [*quic.Stream].

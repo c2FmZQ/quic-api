@@ -8,6 +8,7 @@ for f in $(find . -name "*.go"); do
     -e 's:quic[.]((Dial|Listen)(Addr)?(Early)?):quicapi.\1:' \
     -e 's:&quic[.]((Early)?Listener)\{\}:(quicapi.\1)(nil):' \
     -e 's:(&quic[.]Transport\{[^}]*\}):quicapi.WrapTransport(\1):' \
+    -e 's:github.com/quic-go/quic-go/http3/qlog:github.com/c2FmZQ/http3-go/qlog:' \
     $f
 done
 
