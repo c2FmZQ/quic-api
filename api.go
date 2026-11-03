@@ -92,6 +92,7 @@ type ReceiveStream interface {
 	CancelRead(quic.StreamErrorCode)
 	Peek([]byte) (int, error)
 	Read([]byte) (int, error)
+	ReleaseStreamCredit()
 	SetReadDeadline(time.Time) error
 	SetReceiveFinalSizeCallback(func(int64))
 	StreamID() quic.StreamID
@@ -106,6 +107,7 @@ type Stream interface {
 	Context() context.Context
 	Peek([]byte) (int, error)
 	Read([]byte) (int, error)
+	ReleaseStreamCredit()
 	SetDeadline(time.Time) error
 	SetPriority(int8, bool)
 	SetReadDeadline(time.Time) error
@@ -516,6 +518,10 @@ func (w *WrappedReceiveStream) Read(b []byte) (int, error) {
 	return w.base.Read(b)
 }
 
+func (w *WrappedReceiveStream) ReleaseStreamCredit() {
+	w.base.ReleaseStreamCredit()
+}
+
 func (w *WrappedReceiveStream) SetReadDeadline(t time.Time) error {
 	return w.base.SetReadDeadline(t)
 }
@@ -580,6 +586,10 @@ func (w *WrappedStream) Peek(b []byte) (int, error) {
 
 func (w *WrappedStream) Read(b []byte) (int, error) {
 	return w.base.Read(b)
+}
+
+func (w *WrappedStream) ReleaseStreamCredit() {
+	w.base.ReleaseStreamCredit()
 }
 
 func (w *WrappedStream) SetDeadline(t time.Time) error {
